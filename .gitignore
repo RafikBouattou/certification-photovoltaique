@@ -19,3 +19,6 @@ pip-selfcheck.json
 .idea/
 *.swp
 *.swo
+
+# Gemini CLI specific
+.genkit/
