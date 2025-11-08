@@ -68,19 +68,19 @@ certification-photovoltaique/
 ├── Dataset/               # Données brutes (à télécharger depuis Dryad)
 │   └── ...
 └── certificat/
-    ├── data/                # Données traitées et résultats
-    ├── model/               # Modèles entraînés
-    ├── reports/             # Rapports générés (HTML, images)
+    ├── data/                # Données traitées et résultats (ignoré par .gitignore)
+    ├── model/               # Modèles entraînés (ignoré par .gitignore)
+    ├── reports/             # Rapports générés (ignoré par .gitignore)
     ├── scripts/             # Scripts Python du projet
-    │   ├── prepare_data.py            # 1. Préparation des données
-    │   ├── calculate_indicators_v4.py # 2. Calcul des indicateurs
-    │   ├── generate_labeling_template.py # 3. Étiquetage automatique
-    │   ├── balance_classes.py         # 4. Rééquilibrage des classes
-    │   ├── train_and_predict_certification.py # 5. Entraînement et prédiction
-    │   ├── generate_report.py         # 6. Génération de rapports HTML
-    │   ├── generateur_dashboard.py    # Outil: Dashboard interactif
-    │   ├── simulateur_live.py       # Outil: Simulation temps réel
-    │   └── TFT.py                   # Exploration: Modèle Deep Learning
+    │   ├── prepare_data.py
+    │   ├── calculate_indicators_v4.py
+    │   ├── generate_labeling_template.py
+    │   ├── balance_classes.py
+    │   ├── train_and_predict_certification.py
+    │   ├── generate_report.py
+    │   ├── generateur_dashboard.py
+    │   ├── simulateur_live.py
+    │   └── TFT.py
     ├── .gitignore
     ├── README.md
     └── requirements.txt
