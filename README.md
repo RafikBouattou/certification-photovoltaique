@@ -143,9 +143,19 @@ Exécutez les scripts dans l'ordre depuis la racine du dossier `certificat` :
 
 *   **`data/results/certification_predictions.csv` :** Prédictions de conformité pour chaque site.
 *   **`model/best_certification_model.joblib` :** Modèle entraîné et prêt à l'emploi.
-*   `reports/` : Rapports HTML interactifs par site et visualisations (`confusion_matrix.png`, `feature_importance.png`, `shap_summary.png`).
+*   **`reports/`** : Rapports HTML interactifs par site et visualisations.
 
-![Feature Importance](reports/feature_importance.png)
+<p align="center">
+  <img src="reports/feature_importance.png" alt="Feature Importance" width="600"/>
+  <br>
+  <em>Importance des caractéristiques déterminée par le modèle.</em>
+</p>
+
+<p align="center">
+  <img src="reports/shap_summary.png" alt="SHAP Summary Plot" width="600"/>
+  <br>
+  <em>Résumé SHAP expliquant l'impact des caractéristiques sur les prédictions.</em>
+</p>
 
 ## 🛠️ Technologies
 
