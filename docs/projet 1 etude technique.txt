@@ -1,0 +1,131 @@
+Explication Technique Détaillée de l'Étude de Certification des Sites PV
+
+Introduction :
+Cette étude a mis en œuvre une chaîne de traitement de données et d'apprentissage automatique pour la certification automatisée des sites photovoltaïques (PV). L'objectif est de transformer des données brutes de capteurs en informations exploitables pour évaluer la performance et la conformité des sites, en utilisant des outils Python standards pour la science des données.
+
+1. Phase 1 : Préparation et Nettoyage des Données (Script : `prepare_data.py`)
+
+Objectif : Consolider, nettoyer et valider les données brutes provenant de diverses sources pour obtenir un jeu de données temporellement aligné et cohérent.
+
+Comment nous l'avons fait :
+*   **Chargement des Données :**
+    *   Nous avons utilisé la bibliothèque `pandas` pour lire les fichiers CSV et `pathlib.Path` pour gérer les chemins de fichiers de manière robuste sur Windows.
+    *   Les données des onduleurs (44 fichiers), des sites avec optimiseurs (37 fichiers), des sites sans optimiseurs (23 fichiers) et météorologiques (irradiance, 3 fichiers annuels) ont été chargées.
+    *   Une fonction `load_and_process_data` a été créée pour automatiser le chargement, l'extraction du nom du site à partir du nom de fichier (ex: `lambda x: x.replace('_Inverter.csv', '')`) et la concaténation des DataFrames.
+*   **Conversion des Timestamps :**
+    *   La colonne 'Time' de chaque DataFrame a été convertie en objets datetime à l'aide de `pd.to_datetime()`. Pour gérer les formats de date/heure potentiellement mixtes, l'option `format='mixed'` a été spécifiée pour les données onduleurs et sites, et `format='%Y/%m/%d %H:%M'` pour les données météorologiques.
+*   **Fusion des Données :**
+    *   Les DataFrames des onduleurs et des sites ont été fusionnés sur les colonnes 'site_name' et 'Time' en utilisant `pd.merge(..., how='outer')` pour conserver toutes les entrées.
+    *   Le DataFrame résultant a ensuite été fusionné avec les données météorologiques sur la colonne 'Time' en utilisant `pd.merge(..., how='left')`.
+*   **Traitement Site par Site :**
+    *   Pour garantir une cohérence et éviter les problèmes de type de données lors du rééchantillonnage, le traitement a été effectué site par site. Une boucle a itéré sur tous les noms de sites uniques.
+    *   Pour chaque site, les données pertinentes ont été filtrées.
+*   **Alignement Temporel et Interpolation :**
+    *   Pour chaque site, la colonne 'Time' a été définie comme index (`set_index('Time')`).
+    *   Les données ont été rééchantillonnées à une fréquence d'une minute (`resample('1min').mean()`). Seules les colonnes numériques ont été rééchantillonnées pour éviter les erreurs.
+    *   Les valeurs manquantes introduites par le rééchantillonnage ou initialement présentes ont été remplacées par interpolation linéaire (`interpolate(method='linear')`).
+*   **Validation des Plages Physiques :**
+    *   Les valeurs des colonnes de tension, de courant et de fréquence ont été bornées à des plages physiques réalistes à l'aide de la méthode `clip()` de Pandas.
+        *   Tension (ex: `dcVoltage(V)`, `L1_acVoltage(V)`): bornée entre 0V et 1000V.
+        *   Courant (ex: `L1_acCurrent(A)`): borné entre 0A et 100A.
+        *   Fréquence (ex: `L1_acFrequency(Hz)`): bornée entre 45Hz et 55Hz.
+*   **Exportation :** Le DataFrame nettoyé et validé, contenant toutes les données fusionnées et traitées, a été exporté vers `cleaned_data.csv`.
+
+2. Phase 2 : Calcul des Indicateurs de Performance (Script : `calculate_indicators_v4.py`)
+
+Objectif : Dériver 7 indicateurs clés de performance électrique pour chaque site à partir des données nettoyées, et calculer un score de qualité global.
+
+Comment nous l'avons fait :
+*   **Chargement des Données :** Le fichier `cleaned_data.csv` a été chargé.
+*   **Calcul des Indicateurs par Site :**
+    *   Une fonction `calculate_site_indicators` a été développée pour calculer chaque indicateur pour un DataFrame de site donné.
+    *   **`dc_voltage_stability` :** Écart-type de `dcVoltage(V)`. Une alerte est déclenchée si >150V (non implémenté dans le score, mais noté).
+    *   **`ac_voltage_balance` :** Moyenne du maximum des différences absolues entre les tensions AC triphasées (`L1_acVoltage(V)`, `L2_acVoltage(V)`, `L3_acVoltage(V)`). Une alerte est déclenchée si >5V.
+    *   **`ac_current_harmony` :** Compte le nombre de fois où le courant AC (`L1_acCurrent(A)`) dépasse 1.5 fois sa moyenne. Une alerte est déclenchée si >0.
+    *   **`ac_frequency_stability` :** Compte le nombre de fois où la fréquence AC (`L1_acFrequency(Hz)`) s'écarte de plus de 0.5Hz de 50Hz. Une alerte est déclenchée si >50.
+    *   **`power_factor` :** Moyenne du facteur de puissance calculé comme `activePower / sqrt(activePower² + reactivePower²)`. Un minimum de 0.85 est attendu.
+    *   **`generation_irradiance_ratio` :** Moyenne du ratio `power(W) / Irradiance (W/m2)`. Une normalisation par rapport à un site de référence est suggérée mais non implémentée (nécessite un site de référence défini).
+    *   **`temporal_variability` :** Compte le nombre de fois où la variation absolue de puissance (`power(W)`) dépasse 30% de la puissance maximale du site. Une alerte est déclenchée si >200.
+    *   Des vérifications de l'existence des colonnes et de la non-vacuité des données ont été ajoutées pour chaque calcul, attribuant `np.nan` en cas de données manquantes et enregistrant un avertissement (`logging.warning`).
+*   **Score de Qualité Global (`overall_quality_score`) :**
+    *   Chaque indicateur a été normalisé sur une échelle de 0 à 100 en utilisant une normalisation min-max. Pour les indicateurs où une valeur plus faible est meilleure (stabilité, balance, harmonie, variabilité), le score a été inversé (`100 - normalized`).
+    *   Le score de qualité global est la moyenne de tous les indicateurs normalisés.
+*   **Exportation :** Le DataFrame `indicators_scores.csv` a été exporté, contenant les indicateurs calculés et le score de qualité global pour chaque site.
+
+3. Phase 3A : Génération du Template de Labellisation (Script : `generate_labeling_template.py`)
+
+Objectif : Préparer un sous-ensemble des données d'indicateurs pour la labellisation manuelle par un expert.
+
+Comment nous l'avons fait :
+*   **Chargement des Données :** Le fichier `indicators_scores.csv` a été chargé.
+*   **Sélection Aléatoire :** 20 sites ont été sélectionnés aléatoirement à l'aide de `df.sample(n=20, random_state=42)`. `random_state=42` assure la reproductibilité de la sélection.
+*   **Ajout de la Colonne de Labellisation :** Une colonne vide nommée `YOUR_LABEL_HERE` a été ajoutée pour que l'expert puisse y saisir manuellement les labels.
+*   **Exportation :** Le template `labellisation_template.csv` a été exporté.
+
+4. Phase 4 : Entraînement et Prédiction du Modèle (Script : `train_and_predict_certification.py`)
+
+Objectif : Entraîner un modèle de Machine Learning pour prédire la classe de certification des sites et évaluer sa performance.
+
+Comment nous l'avons fait :
+*   **Chargement des Données :**
+    *   `labellisation_template.csv` (après labellisation manuelle) a été chargé comme jeu de données d'entraînement. Les lignes sans label ont été supprimées.
+    *   `indicators_scores.csv` a été chargé pour les prédictions sur tous les sites.
+*   **Préparation des Features et Target :**
+    *   Les 7 indicateurs ont été définis comme features (X).
+    *   La colonne `YOUR_LABEL_HERE` a été définie comme target (y).
+    *   Les valeurs `NaN` dans les features ont été remplies avec la médiane des features d'entraînement (`fillna(X_train.median())`) pour éviter les erreurs du modèle.
+    *   Les labels textuels ont été encodés numériquement à l'aide de `sklearn.preprocessing.LabelEncoder`.
+*   **Entraînement du Modèle :**
+    *   Un `RandomForestClassifier` de `sklearn.ensemble` a été initialisé avec `random_state=42` pour la reproductibilité.
+    *   Le modèle a été entraîné sur les données labellisées (`model.fit(X_train, y_train)`).
+*   **Validation Croisée :**
+    *   Une validation croisée 10-fold a été effectuée à l'aide de `cross_val_score(cv=10, scoring='accuracy')` pour évaluer la robustesse du modèle.
+    *   Un rapport de classification détaillé (accuracy, precision, recall, F1-score) a été généré sur un sous-ensemble de test (20% des données labellisées) pour une évaluation plus fine.
+*   **Prédiction sur Tous les Sites :**
+    *   Le modèle entraîné a été utilisé pour prédire la classe de certification (`model.predict()`) et le score de confiance (probabilité maximale `model.predict_proba().max(axis=1)`) pour tous les sites du `indicators_scores.csv`.
+*   **Exportation des Prédictions :** Les prédictions ont été exportées vers `certification_predictions.csv`, incluant le nom du site, les indicateurs, la classe prédite et le score de confiance.
+*   **Visualisations :**
+    *   Une matrice de confusion (`confusion_matrix.png`) a été générée pour visualiser les performances du modèle sur le jeu de test.
+    *   Un graphique d'importance des caractéristiques (`feature_importance.png`) a été généré pour montrer l'influence de chaque indicateur sur les prédictions du modèle.
+
+5. Phase 5 : Génération du Rapport (Script : `generate_report.py`)
+
+Objectif : Créer un rapport interactif HTML et un résumé PDF pour présenter les résultats de l'étude.
+
+Comment nous l'avons fait :
+*   **Chargement des Données :**
+    *   `certification_predictions.csv` a été chargé pour les résultats des prédictions.
+    *   `labellisation_template.csv` a été chargé pour les vrais labels (nécessaire pour la matrice de confusion si elle était interactive en HTML).
+    *   `indicators_scores.csv` a été chargé pour les valeurs des indicateurs (pour les box plots).
+*   **Rapport HTML Interactif (`etude1_rapport_interactif.html`) :**
+    *   Utilisation de `plotly.express` pour générer :
+        *   Un histogramme de la distribution des classes prédites.
+        *   Des box plots montrant la distribution de chaque indicateur par classe prédite.
+    *   Les figures Plotly sont exportées dans un fichier HTML unique, permettant une exploration interactive des données.
+*   **Rapport PDF (`etude1_rapport.pdf`) :**
+    *   Utilisation de la bibliothèque `reportlab` pour créer un document PDF structuré.
+    *   Le rapport inclut les sections suivantes avec du texte explicatif (placeholders à personnaliser) :
+        *   **Méthodologie :** Description détaillée des phases 1 à 4.
+        *   **Résultats :** Distribution des classes prédites, métriques de performance du modèle (valeurs à insérer manuellement ou à passer du script de Phase 4), et intégration des images de la matrice de confusion et de l'importance des caractéristiques générées en Phase 4.
+        *   **Recommandations par Classe :** Suggestions d'actions spécifiques pour chaque classe de certification.
+        *   **Conclusions Sonelgaz :** Synthèse des apports de l'étude pour l'entreprise.
+    *   Les images `confusion_matrix.png` et `feature_importance.png` sont intégrées directement dans le PDF.
+
+Outils et Bibliothèques Clés Utilisés :
+*   **`pandas` :** Manipulation et analyse de données (chargement, fusion, nettoyage, rééchantillonnage).
+*   **`pathlib` :** Gestion des chemins de fichiers de manière orientée objet et compatible avec différents OS.
+*   **`numpy` :** Opérations numériques et gestion des valeurs manquantes.
+*   **`sklearn` (scikit-learn) :** Apprentissage automatique (Random Forest, encodage de labels, validation croisée, métriques de classification).
+*   **`plotly` :** Génération de visualisations interactives pour le rapport HTML.
+*   **`matplotlib.pyplot` et `seaborn` :** Génération de visualisations statiques (matrice de confusion, importance des caractéristiques) pour le rapport PDF.
+*   **`reportlab` :** Création de documents PDF programmatiques.
+*   **`logging` :** Suivi de l'exécution et débogage des scripts.
+
+Pour Répliquer et Personnaliser :
+Chaque script est conçu pour être modulaire. Vous pouvez :
+*   **Ajuster les Chemins :** Modifier la variable `base_path` et les `relative_path_pattern` dans `prepare_data.py` si la structure de vos données change.
+*   **Affiner les Indicateurs :** Modifier les formules dans `calculate_site_indicators` dans `calculate_indicators_v4.py` selon des définitions plus précises ou des seuils d'alerte spécifiques.
+*   **Personnaliser la Normalisation :** Ajuster les plages `min_val`, `max_val` dans `normalize_score` et les poids des indicateurs pour le `overall_quality_score` dans `calculate_indicators_v4.py`.
+*   **Mettre à Jour les Labels :** Remplir `YOUR_LABEL_HERE` dans `labellisation_template.csv` avec vos propres classifications.
+*   **Optimiser le Modèle ML :** Expérimenter avec différents hyperparamètres du `RandomForestClassifier` ou d'autres modèles dans `train_and_predict_certification.py`.
+*   **Enrichir les Rapports :** Modifier le texte des rapports HTML et PDF dans `generate_report.py` pour inclure des analyses plus approfondies, des graphiques supplémentaires ou des recommandations spécifiques à votre contexte.
