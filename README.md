@@ -143,7 +143,9 @@ Exécutez les scripts dans l'ordre depuis la racine du dossier `certificat` :
 
 *   **`data/results/certification_predictions.csv` :** Prédictions de conformité pour chaque site.
 *   **`model/best_certification_model.joblib` :** Modèle entraîné et prêt à l'emploi.
-*   **`reports/` :** Rapports HTML interactifs par site et visualisations (`confusion_matrix.png`, `feature_importance.png`, `shap_summary.png`).
+*   `reports/` : Rapports HTML interactifs par site et visualisations (`confusion_matrix.png`, `feature_importance.png`, `shap_summary.png`).
+
+![Feature Importance](reports/feature_importance.png)
 
 ## 🛠️ Technologies
 
