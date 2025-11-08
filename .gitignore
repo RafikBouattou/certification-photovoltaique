@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-selfcheck.json
+.env
+
+# Data, Models, and Reports
+/data/
+/model/
+/reports/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+*.swo

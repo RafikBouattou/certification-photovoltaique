@@ -1,0 +1,119 @@
+# PROJET : Certification et Analyse de Performance de Sites Photovoltaïques par IA
+
+## 1. Objectif du Projet
+
+Ce projet implémente une solution de bout en bout pour l'évaluation automatisée de la performance et de la conformité de parcs photovoltaïques (PV). L'objectif est de transformer les données brutes des onduleurs et des capteurs météorologiques en un diagnostic actionnable, présenté sous forme d'un tableau de bord interactif.
+
+La solution vise à :
+- Automatiser et standardiser le processus de certification.
+- Détecter les sites sous-performants ou présentant des risques.
+- Fournir un outil d'aide à la décision pour les opérateurs de maintenance, les gestionnaires d'actifs et les investisseurs.
+
+
+## 2. Méthodologie en 5 Phases
+
+La chaîne de traitement est organisée en plusieurs scripts modulaires :
+
+*   **Phase 1 : Préparation des Données (`prepare_data.py`)**
+    - Charge les données brutes depuis le dossier `Dataset`.
+    - Fusionne les données des onduleurs, des sites et de la météo.
+    - Aligne toutes les données sur une fréquence commune (1 minute) et interpole les valeurs manquantes.
+    - Valide les données en les bornant à des plages physiques réalistes.
+    - Sortie : `cleaned_data.csv` dans `data/processed/`.
+
+*   **Phase 2 : Calcul des Indicateurs (`calculate_indicators_v4.py`)**
+    - Lit le fichier `cleaned_data.csv`.
+    - Calcule 7 indicateurs de performance électrique et un score de qualité global pour chaque site.
+    - Sortie : `indicators_scores.csv` dans `data/results/`.
+
+*   **Phase 3 : Labellisation & Équilibrage (`generate_labeling_template.py`, `balance_classes.py`)**
+    - `generate_labeling_template.py` applique des règles basées sur le score de qualité pour créer un premier jeu de labels.
+    - `balance_classes.py` utilise la technique SMOTE pour sur-échantillonner les classes sous-représentées, créant un jeu de données équilibré pour l'entraînement.
+    - Sortie : `balanced_training_data.csv` dans `data/processed/`.
+
+*   **Phase 4 : Entraînement & Prédiction (`train_and_predict_certification.py`)**
+    - Entraîne et évalue plusieurs modèles de classification (RandomForest, SVM, XGBoost) sur les données équilibrées.
+    - Sauvegarde le meilleur modèle (`best_certification_model.joblib`) et l'encodeur de labels (`label_encoder.joblib`) dans le dossier `model/`.
+    - Utilise le meilleur modèle pour prédire la classe de certification et le score de confiance pour tous les sites.
+    - Effectue une analyse SHAP pour l'explicabilité du modèle.
+    - Sortie : `certification_predictions.csv` dans `data/results/` et les images d'analyse (`confusion_matrix.png`, `feature_importance.png`, `shap_summary.png`) dans `reports/`.
+
+*   **Phase 5 : Reporting & Simulation (`generate_report.py`, `generateur_dashboard.py`)**
+    - `generate_report.py` crée un rapport PDF synthétique et un rapport HTML générique, incluant la comparaison des modèles et l'analyse SHAP.
+    - `generateur_dashboard.py` est l'outil de démonstration principal. Il génère un tableau de bord HTML interactif et personnalisé pour un site spécifique, incluant des graphiques dynamiques et les résultats de l'analyse.
+
+
+## 3. Structure du Dossier `certificat`
+
+- **`certificat/`**
+    - **`data/`** : Contient toutes les données.
+        - **`processed/`** : Fichiers de données intermédiaires (`cleaned_data.csv`, `balanced_training_data.csv`).
+        - **`results/`** : Fichiers de résultats finaux (`indicators_scores.csv`, `certification_predictions.csv`).
+    - **`docs/`** : Contient la documentation du projet (fichiers .md, .txt), y compris l'article scientifique et la justification des KPIs.
+    - **`model/`** : Contient le modèle de machine learning sauvegardé (`.joblib`).
+    - **`reports/`** : Contient tous les rapports générés (`.html`, `.pdf`) et les images.
+    - **`scripts/`** : Contient tous les scripts Python (`.py`).
+
+
+## 4. Comment Utiliser le Projet
+
+Pour exécuter la chaîne complète et générer tous les livrables, suivez ces étapes dans l'ordre depuis le dossier racine `C:\Users\Flipper\`. Pour plus de détails sur la méthodologie et les résultats, consultez les documents dans le dossier `docs`.
+
+1.  **Préparer les données :**
+    `python certificat\scripts\prepare_data.py`
+
+2.  **Calculer les indicateurs :**
+    `python certificat\scripts\calculate_indicators_v4.py`
+
+3.  **Générer les labels et équilibrer les données :**
+    `python certificat\scripts\generate_labeling_template.py`
+    `python certificat\scripts\balance_classes.py`
+
+4.  **Entraîner le modèle et prédire :**
+    `python certificat\scripts\train_and_predict_certification.py`
+
+5.  **Générer le tableau de bord de démonstration (interactif) :**
+    `python certificat\scripts\generateur_dashboard.py`
+    - Suivez les instructions dans le terminal pour choisir un site et générer son rapport personnalisé.
+
+
+## 5. Synthèse de l'Audit d'Expert (Exemple : Site `Zone A2_Inverter_1.csv`)
+
+L'analyse du tableau de bord généré pour ce site a révélé des informations cruciales :
+
+- **Verdict :** `CONFORME_SOUS_RESERVE` avec une faible confiance de l'IA (64%), indiquant la nécessité d'une vérification humaine.
+- **Points Forts :** L'équilibre des tensions AC, la stabilité de la fréquence et le facteur de puissance sont bons, indiquant une bonne santé côté réseau.
+- **Points de Vigilance :**
+    1.  **`Dc Voltage Stability` (144.52) :** Cette valeur est élevée et proche du seuil d'alerte. Elle suggère une instabilité sur la partie courant continu (panneaux, MPPT) qui justifie à elle seule le statut "sous réserve".
+    2.  **`Generation Irradiance Ratio` (nan) :** L'impossibilité de calculer cet indicateur est un **point critique**. Elle signale des données manquantes pour la puissance ou l'irradiance, empêchant toute évaluation de la performance réelle du site.
+    3.  **`Ac Current Harmony` (36042.00) :** La valeur est irréaliste et révèle une faiblesse dans la méthode de calcul de cet indicateur, qui doit être améliorée pour être plus robuste.
+
+**Conclusion de l'audit :** L'outil a parfaitement rempli son rôle. Il a non seulement posé un diagnostic pertinent, mais a surtout mis en évidence des problèmes de qualité de données et des axes d'amélioration, prouvant ainsi sa valeur en tant qu'outil de diagnostic avancé.
+
+
+## 6. Prochaines Étapes et Vision
+
+- **Phase 2 (Communication) :**
+    - Créer le dépôt GitHub `solar-performance-analysis`.
+    - Publier le projet avec un `README.md` soigné.
+    - Rédiger des articles pour LinkedIn/X pour annoncer le projet et démontrer l'expertise.
+    - Préparer un brouillon d'article scientifique pour des plateformes comme arXiv.
+
+- **Améliorations Techniques Futures :**
+    - [x] Intégrer des indicateurs standards comme le Performance Ratio (PR).
+    - [ ] Améliorer la robustesse du calcul de l'indicateur `Ac Current Harmony`.
+    - [x] Utiliser des techniques d'explicabilité (XAI) comme SHAP pour détailler les prédictions du modèle.
+    - [ ] Effectuer une analyse comparative continue des différents algorithmes de classification.
+
+
+## 7. Architecture de Données (Vision Future)
+
+Actuellement, le projet utilise des fichiers CSV pour le stockage des données, ce qui est idéal pour le prototypage et la démonstration. Cependant, pour un déploiement en production et une surveillance continue à grande échelle, une architecture de base de données robuste est indispensable.
+
+Nous envisageons l'intégration d'une base de données de séries temporelles (par exemple, PostgreSQL avec l'extension TimescaleDB, ou InfluxDB) pour :
+- Gérer efficacement les volumes massifs de données de capteurs.
+- Permettre un accès rapide et optimisé pour les requêtes d'analyse.
+- Assurer la persistance, l'intégrité et la sécurité des données historiques et en temps réel.
+- Faciliter l'intégration avec des systèmes SCADA ou des plateformes de monitoring existantes.
+
+Cette évolution garantira la scalabilité et la fiabilité de la solution pour un usage industriel.
